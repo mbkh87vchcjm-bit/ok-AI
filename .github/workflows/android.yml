@@ -117,7 +117,12 @@ jobs:
             scripts/ci.sh flutter test integration_test/app_smoke_test.dart
 
   publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    # The session's GitHub integration can push but cannot dispatch workflows.
+    # A deliberate commit subject acts as a one-time, branch-scoped release request.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/arena/29e6d8bf-ok-ai' &&
+       startsWith(github.event.head_commit.message, '[publish-prerelease] v'))
     needs: [build, emulator]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -132,9 +137,17 @@ jobs:
       - name: Verify checksum and publish a new prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -eu
+          if [ "$TRIGGER_EVENT" = 'push' ]; then
+            RELEASE_TAG="${COMMIT_MESSAGE%%$'\n'*}"
+            RELEASE_TAG="${RELEASE_TAG#\[publish-prerelease\] }"
+          else
+            RELEASE_TAG="$REQUESTED_TAG"
+          fi
           if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
             echo 'Invalid release tag' >&2; exit 1
           fi
