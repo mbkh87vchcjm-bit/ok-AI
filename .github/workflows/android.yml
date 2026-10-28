@@ -36,19 +36,24 @@ jobs:
       - name: Generate the Android scaffold
         run: python3 scripts/bootstrap.py
       - name: Resolve dependencies
-        run: flutter pub get
+        run: scripts/ci.sh flutter pub get
       - name: Static analysis
-        run: flutter analyze
+        run: scripts/ci.sh flutter analyze --no-pub
       - name: Unit and widget tests
-        run: flutter test
+        run: scripts/ci.sh flutter test --no-pub
       - name: Build release-mode APK with a debug signing key
-        run: flutter build apk --release
+        run: scripts/ci.sh flutter build apk --release --no-pub
       - name: Prepare APK and checksum
         run: |
           mkdir -p release
           cp build/app/outputs/flutter-apk/app-release.apk release/personal-agent-android.apk
           cd release
           sha256sum personal-agent-android.apk > SHA256SUMS.txt
+          APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          "$APK_SIGNER" verify --verbose --print-certs personal-agent-android.apk > signature.txt
+          cat SHA256SUMS.txt signature.txt
+          echo "::notice title=APK checksum::$(cat SHA256SUMS.txt)"
+          echo "::notice title=APK signature::$(grep 'Signer #1 certificate SHA-256 digest:' signature.txt)"
       - name: Upload verified build inputs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
