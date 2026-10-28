@@ -392,7 +392,10 @@ class AgentController extends ChangeNotifier {
               description: 'إرسال المقتطف التالي إلى مزود النموذج الخارجي في الطلب التالي. قد يحتوي على بيانات خاصة.',
               content: shared), version);
           if (share == null) return const _ToolOutcome('تغيرت حالة التحكم؛ لم تُشارك الصفحة.');
-          if (share != PermissionDecision.approved) return _decision(share);
+          if (share != PermissionDecision.approved) {
+            permissions.denyForTask('read_page', origin);
+            return _decision(share);
+          }
           final current = await browser.currentUrl();
           if (!_current(version) || browser.revision != snapshot.revision || current != snapshot.url) {
             return const _ToolOutcome('تغيرت الصفحة بعد الموافقة؛ لم تُشارك.');
@@ -407,7 +410,7 @@ class AgentController extends ChangeNotifier {
           final uri = InputPolicy.httpsUrl(args['url'] as String);
           final target = InputPolicy.origin(uri);
           final decision = await _authorize(PermissionRequest(action: 'navigate', origin: target,
-              description: 'انتقال إلى الرابط التالي. قد يتصل الموقع بخدمات أخرى.', content: uri.toString(), ruleEligible: true), version);
+              description: 'انتقال إلى الرابط التالي. حتى التنقل قد يغيّر بيانات الموقع؛ راجع الرابط. قد يتصل الموقع بخدمات أخرى.', content: uri.toString()), version);
           if (decision == null) return const _ToolOutcome('تغيرت حالة التحكم؛ لم يبدأ الانتقال.');
           if (decision != PermissionDecision.approved) return _decision(decision);
           if (!_current(version)) return const _ToolOutcome('لم يبدأ الانتقال.');
@@ -431,12 +434,20 @@ class AgentController extends ChangeNotifier {
               await browser.currentUrl() != snapshot.url) {
             return const _ToolOutcome('تحتاج هذه الخطوة إلى قراءة حديثة للصفحة وموافقة جديدة.', failure: true);
           }
+          final matches = snapshot.elements.where((element) => element is Map && element['selector'] == selector).toList();
+          if (matches.length != 1) {
+            return const _ToolOutcome('المحدد غير موجود أو ملتبس في قراءة الصفحة الأخيرة؛ لم يُنفذ الإجراء.', failure: true);
+          }
+          final element = matches.single as Map;
+          final tag = element['tag'] is String ? element['tag'] as String : '';
+          final label = element['label'] is String ? element['label'] as String : '';
           final origin = InputPolicy.origin(InputPolicy.httpsUrl(snapshot.url));
+          final elementDetails = 'المحدد: $selector\nالنوع: $tag\nالعنوان الظاهر: $label';
           final decision = await _authorize(PermissionRequest(action: call.name, origin: origin,
               description: typing
                   ? 'كتابة النص فقط، دون ضغط زر إرسال. قد يرسله الموقع تلقائيًا أثناء الكتابة.'
-                  : 'نقر العنصر قد يرسل أو ينشر أو يغيّر بيانات؛ راجع المحدد بعناية.',
-              content: typing ? 'المحدد: $selector\n\nالنص:\n$text' : 'المحدد: $selector'), version);
+                  : 'نقر العنصر قد يرسل أو ينشر أو يغيّر بيانات؛ راجع المحدد والعنوان بعناية.',
+              content: typing ? '$elementDetails\n\nالنص:\n$text' : elementDetails), version);
           if (decision == null) return const _ToolOutcome('تغيرت حالة التحكم؛ لم يُنفذ الإجراء.');
           if (decision != PermissionDecision.approved) return _decision(decision);
           if (!await _safePage(version) || !_current(version)) {
@@ -487,7 +498,10 @@ class AgentController extends ChangeNotifier {
           final share = await _authorize(PermissionRequest(action: 'share_answer', origin: 'local',
               description: 'إرسال هذه الإجابة إلى مزود النموذج الخارجي.', content: answer), version);
           if (share == null) return const _ToolOutcome('تغيرت حالة التحكم؛ لم تُشارك الإجابة.');
-          if (share != PermissionDecision.approved) return _decision(share);
+          if (share != PermissionDecision.approved) {
+            permissions.denyForTask('ask_user', 'local');
+            return _decision(share);
+          }
           _log(call.name, 'قُدمت إجابة بعد موافقة المستخدم على مشاركتها.');
           return _ToolOutcome('إجابة المستخدم: $answer', success: true);
 

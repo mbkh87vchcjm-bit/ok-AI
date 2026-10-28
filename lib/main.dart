@@ -550,7 +550,7 @@ class _HomePageState extends State<HomePage> {
       const Text('أدخل أسعار مزودك الفعلية لتفعيل الحد. التقدير غير مضمون وقد تتجاوز الفاتورة الحد؛ اضبط حدًا مستقلًا لدى المزود. إذا غاب تقرير الرموز تتوقف المهمة.'),
       const Divider(height: 28),
       const Text('قواعد الموافقة الدائمة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      const Text('الافتراضي طلب الموافقة. القواعد الدائمة متاحة للتنقل فقط؛ القراءة والمشاركة والكتابة والنقر والحفظ تحتاج موافقة كل مرة.'),
+      const Text('الافتراضي طلب الموافقة. القواعد الدائمة متاحة لإعادة التوجيه بين النطاقات فقط؛ جميع أدوات الوكيل، بما فيها الانتقال، تحتاج موافقة لكل مرة.'),
       if (_permissions!.persistent.isEmpty) const Text('لا توجد قواعد سماح دائمة.'),
       ..._permissions!.persistent.map((key) => ListTile(title: Text(key.replaceFirst('|', ' — ')),
         trailing: IconButton(tooltip: 'إلغاء القاعدة', icon: const Icon(Icons.delete_outline), onPressed: () async {

@@ -28,6 +28,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.27.4'
@@ -37,18 +38,8 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Generate the Android scaffold
         run: python3 scripts/bootstrap.py
-      - name: Audit Android scaffold (1/4)
-        run: python3 scripts/audit_scaffold.py 0
-      - name: Audit Android scaffold (2/4)
-        run: python3 scripts/audit_scaffold.py 1
-      - name: Audit Android scaffold (3/4)
-        run: python3 scripts/audit_scaffold.py 2
-      - name: Audit Android scaffold (4/4)
-        run: python3 scripts/audit_scaffold.py 3
       - name: Resolve dependencies
-        run: scripts/ci.sh flutter pub get
-      - name: Record resolved lockfile for audit
-        run: python3 scripts/audit_lock.py
+        run: scripts/ci.sh flutter pub get --enforce-lockfile
       - name: Static analysis
         run: scripts/ci.sh flutter analyze --no-pub
       - name: Unit and widget tests
@@ -67,7 +58,7 @@ jobs:
           echo "::notice title=APK checksum::$(cat SHA256SUMS.txt)"
           echo "::notice title=APK signature::$(grep 'Signer #1 certificate SHA-256 digest:' signature.txt)"
       - name: Upload verified build inputs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: personal-agent-android
           path: |
@@ -88,6 +79,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.27.4'
@@ -96,8 +88,8 @@ jobs:
       - name: Prepare Flutter project
         run: |
           python3 scripts/bootstrap.py
-          scripts/ci.sh flutter pub get
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+          scripts/ci.sh flutter pub get --enforce-lockfile
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: personal-agent-android
           path: release
@@ -133,7 +125,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: personal-agent-android
           path: release

@@ -6,6 +6,7 @@ scaffolds are never overwritten; review them and remove them manually if they
 need to be regenerated. No API credentials are required.
 """
 from pathlib import Path
+import hashlib
 import shutil
 import re
 import subprocess
@@ -15,6 +16,13 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 ANDROID = ROOT / "android"
+WRAPPER_SOURCE = ROOT / "scripts/assets/gradle-wrapper-8.7.jar"
+# Official Gradle 8.7 wrapper SHA-256, https://gradle.org/release-checksums/
+WRAPPER_SHA256 = "cb0da6751c2b753a16ac168bb354870ebb1e162e9083f116729cec9c781156b8"
+
+
+def valid_wrapper(path: Path) -> bool:
+    return path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == WRAPPER_SHA256
 
 
 def main() -> int:
@@ -31,7 +39,9 @@ def main() -> int:
         if app is None or app.get(ns + "allowBackup") != "false" or \
            app.get(ns + "usesCleartextTraffic") != "false" or not internet:
             raise SystemExit("Existing Android manifest lacks required safety settings; it was not modified")
-        print("android/ already exists and passes manifest checks; leaving it unchanged")
+        if not valid_wrapper(ANDROID / "gradle/wrapper/gradle-wrapper.jar"):
+            raise SystemExit("Existing Gradle wrapper is missing or does not match the pinned official checksum")
+        print("android/ already exists and passes manifest and wrapper checks; leaving it unchanged")
         return 0
     flutter = shutil.which("flutter")
     if not flutter:
@@ -87,6 +97,11 @@ def main() -> int:
         # https://gradle.org/release-checksums/ (8.7 binary distribution)
         wrapper_text += "\ndistributionSha256Sum=544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d\n"
         wrapper.write_text(wrapper_text, encoding="utf-8")
+        # Flutter's generated wrapper can be older and may not enforce the
+        # distribution checksum. Install the locally vendored, verified 8.7 jar.
+        if not valid_wrapper(WRAPPER_SOURCE):
+            raise SystemExit("Pinned Gradle wrapper asset is missing or has an unexpected checksum")
+        shutil.copyfile(WRAPPER_SOURCE, android / "gradle/wrapper/gradle-wrapper.jar")
         # Copy only the platform scaffold. The application's lib/, pubspec,
         # tests and workflow remain untouched.
         shutil.copytree(android, ANDROID)

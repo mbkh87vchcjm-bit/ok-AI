@@ -68,12 +68,12 @@ void main() {
       var saved = <String>{};
       final p = TaskPermissions(prompt: (_) async { prompts++; return ApprovalScope.permanent; },
           persistent: {}, persist: (value) async { saved = value; });
-      const nav = PermissionRequest(action: 'navigate', origin: 'https://example.com', description: 'test', ruleEligible: true);
-      const other = PermissionRequest(action: 'navigate', origin: 'https://other.com', description: 'test', ruleEligible: true);
+      const nav = PermissionRequest(action: 'redirect', origin: 'https://example.com', description: 'test', ruleEligible: true);
+      const other = PermissionRequest(action: 'redirect', origin: 'https://other.com', description: 'test', ruleEligible: true);
       expect(await p.authorize(nav), PermissionDecision.approved);
       expect(await p.authorize(nav), PermissionDecision.approved);
       expect(prompts, 1);
-      expect(saved, contains('navigate|https://example.com'));
+      expect(saved, contains('redirect|https://example.com'));
       await p.authorize(other);
       expect(prompts, 2);
       await p.revoke(nav.key);
@@ -85,10 +85,13 @@ void main() {
       var prompts = 0;
       final p = TaskPermissions(prompt: (_) async { prompts++; return ApprovalScope.permanent; },
           persistent: {'save_file|local'}, persist: (_) async {});
-      const save = PermissionRequest(action: 'save_file', origin: 'local', description: 'test');
+      const save = PermissionRequest(action: 'save_file', origin: 'local', description: 'test', ruleEligible: true);
+      const navigate = PermissionRequest(action: 'navigate', origin: 'https://example.com', description: 'test', ruleEligible: true);
       await p.authorize(save);
       await p.authorize(save);
-      expect(prompts, 2);
+      await p.authorize(navigate);
+      await p.authorize(navigate);
+      expect(prompts, 4);
     });
   });
 }

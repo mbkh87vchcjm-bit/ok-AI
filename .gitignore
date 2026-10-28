@@ -6,8 +6,6 @@
 .pub-cache/
 build/
 coverage/
-# Android is generated deterministically by scripts/bootstrap.py.
-/android/
 # Local editor and secret material
 .idea/
 .vscode/

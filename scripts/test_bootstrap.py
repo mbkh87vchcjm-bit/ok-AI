@@ -35,6 +35,7 @@ class BootstrapTests(unittest.TestCase):
                     'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.3-all.zip\n')
 
             with patch.object(bootstrap, 'ROOT', root), patch.object(bootstrap, 'ANDROID', root / 'android'), \
+                 patch.object(bootstrap, 'WRAPPER_SOURCE', Path(__file__).parent / 'assets/gradle-wrapper-8.7.jar'), \
                  patch.object(bootstrap.shutil, 'which', return_value='/opt/flutter/bin/flutter'), \
                  patch.object(bootstrap.subprocess, 'run', side_effect=fake_flutter) as run:
                 self.assertEqual(bootstrap.main(), 0)
@@ -46,6 +47,7 @@ class BootstrapTests(unittest.TestCase):
                 self.assertIn('minSdk = 23', (root / 'android/app/build.gradle').read_text())
                 self.assertIn('8.6.1', (root / 'android/settings.gradle').read_text())
                 self.assertIn('distributionSha256Sum=', (root / 'android/gradle/wrapper/gradle-wrapper.properties').read_text())
+                self.assertTrue(bootstrap.valid_wrapper(root / 'android/gradle/wrapper/gradle-wrapper.jar'))
                 self.assertEqual(bootstrap.main(), 0)
                 self.assertEqual(run.call_count, 1)
 

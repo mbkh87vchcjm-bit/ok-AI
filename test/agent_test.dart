@@ -22,7 +22,7 @@ class FakeBrowser implements BrowserPort {
   @override
   Future<bool> needsIntervention() async => human;
   @override
-  Future<BrowserSnapshot> readPage() async => BrowserSnapshot(url: url, title: 'page', text: 'PRIVATE PAGE SENTINEL', elements: const [], revision: revision);
+  Future<BrowserSnapshot> readPage() async => BrowserSnapshot(url: url, title: 'page', text: 'PRIVATE PAGE SENTINEL', elements: const [{'selector': '#safe', 'tag': 'button', 'label': 'Safe'}], revision: revision);
   @override
   Future<void> navigate(Uri target) async { navigations++; url = target.toString(); revision++; }
   @override
@@ -158,6 +158,27 @@ void main() {
     agent.dispose();
   });
 
+  test('refusing page sharing also prevents automatically reading it again', () async {
+    var readPrompts = 0;
+    final provider = FakeProvider([
+      () async => turn(tools: [read()]),
+      () async => turn(tools: [read()]),
+    ]);
+    final agent = agentFor(provider, permission((request) async {
+      if (request.action == 'read_page') readPrompts++;
+      return request.action == 'share_page' ? ApprovalScope.deny : ApprovalScope.once;
+    }));
+    final paused = whenPhase(agent, TaskPhase.paused);
+    final run = start(agent);
+    await paused.future.timeout(const Duration(seconds: 2));
+    agent.resume();
+    await run.timeout(const Duration(seconds: 2));
+    expect(readPrompts, 1);
+    expect(agent.phase, TaskPhase.failed);
+    expect(jsonEncode(provider.sent), isNot(contains('PRIVATE PAGE SENTINEL')));
+    agent.dispose();
+  });
+
   test('challenge detection switches to manual before reading a page', () async {
     browser.human = true;
     final provider = FakeProvider([() async => turn(tools: [read()])]);
@@ -169,6 +190,21 @@ void main() {
     expect(jsonEncode(provider.sent), isNot(contains('PRIVATE PAGE SENTINEL')));
     agent.cancel();
     await run.timeout(const Duration(seconds: 2));
+    agent.dispose();
+  });
+
+  test('unobserved selectors cannot be clicked even if the model requests them', () async {
+    const call = ToolCall(id: 'call_2', name: 'click', arguments: '{"selector":"#not-observed"}');
+    final provider = FakeProvider([
+      () async => turn(tools: [read()]),
+      () async => turn(tools: [call]),
+      () async => turn(content: 'انتهى'),
+    ]);
+    final agent = agentFor(provider, permission((_) async => ApprovalScope.once));
+    await start(agent);
+    expect(browser.clicks, 0);
+    expect(agent.failures, 1);
+    expect(jsonEncode(provider.sent), contains('المحدد غير موجود'));
     agent.dispose();
   });
 

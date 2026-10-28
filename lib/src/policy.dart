@@ -106,7 +106,7 @@ class PermissionRequest {
   final String origin;
   final String description;
   final String? content;
-  /// Only low-risk navigation can be granted beyond the individual action.
+  /// Only cross-origin redirects may be granted beyond an individual action.
   final bool ruleEligible;
   String get key => '$action|$origin';
 }
@@ -142,7 +142,8 @@ class TaskPermissions {
 
   Future<PermissionDecision> authorize(PermissionRequest request) async {
     if (_denied.contains(request.key)) return PermissionDecision.previouslyDenied;
-    if (request.ruleEligible && (_task.contains(request.key) || _persistent.contains(request.key))) {
+    final mayRemember = request.ruleEligible && request.action == 'redirect';
+    if (mayRemember && (_task.contains(request.key) || _persistent.contains(request.key))) {
       return PermissionDecision.approved;
     }
     final scope = await prompt(request);
@@ -151,9 +152,9 @@ class TaskPermissions {
       return PermissionDecision.denied;
     }
     // A malicious or buggy UI cannot create broad grants for sensitive tools.
-    if (request.ruleEligible && scope == ApprovalScope.task) {
+    if (mayRemember && scope == ApprovalScope.task) {
       _task.add(request.key);
-    } else if (request.ruleEligible && scope == ApprovalScope.permanent) {
+    } else if (mayRemember && scope == ApprovalScope.permanent) {
       _persistent.add(request.key);
       try {
         await persist(Set.of(_persistent));
