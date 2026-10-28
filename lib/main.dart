@@ -328,6 +328,30 @@ class _HomePageState extends State<HomePage> {
     } catch (e) { _message(_error(e)); }
   }
 
+  Future<void> _adoptReference(ReferenceDocument ref) async {
+    final initial = ref.text.length > 2000 ? ref.text.substring(0, 2000) : ref.text;
+    final controller = TextEditingController(text: initial);
+    final value = await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
+      title: Text('اعتماد مقتطف من ${ref.name}'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(ref.text.length > 2000
+            ? 'عُرض أول 2000 حرف فقط. راجع المقتطف وعدّله قبل اعتماده. لا تضع أسرارًا؛ لا يغير صلاحيات الأمان.'
+            : 'راجع النص وعدّله قبل اعتماده قاعدة مشروع. لا تضع أسرارًا؛ لا يغير صلاحيات الأمان.'),
+        TextField(controller: controller, minLines: 4, maxLines: 8, maxLength: 2000),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text), child: const Text('اعتماد كقاعدة')),
+      ],
+    ));
+    controller.dispose();
+    if (value == null) return;
+    try {
+      await _store!.saveRule(text: value);
+      if (mounted) setState(() {});
+    } catch (e) { _message(_error(e)); }
+  }
+
   Future<void> _deleteReference(ReferenceDocument ref) async {
     if (!await _confirm('حذف المرجع؟', 'سيُحذف ${ref.name} من مكتبة التطبيق المحلية.')) return;
     try {
@@ -458,7 +482,10 @@ class _HomePageState extends State<HomePage> {
           title: Text(ref.name), content: SingleChildScrollView(child: SelectableText(ref.text)),
           actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إغلاق'))],
         )),
-        trailing: IconButton(tooltip: 'حذف', onPressed: () => _deleteReference(ref), icon: const Icon(Icons.delete_outline)))),
+        trailing: Wrap(children: [
+          IconButton(tooltip: 'اعتماد مقتطف كقاعدة', onPressed: () => _adoptReference(ref), icon: const Icon(Icons.rule)),
+          IconButton(tooltip: 'حذف', onPressed: () => _deleteReference(ref), icon: const Icon(Icons.delete_outline)),
+        ]))),
       const Divider(),
       const Text('إجراءات استرشادية معتمدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       const Text('تحتوي أسماء الأدوات فقط ولا تنفذ نفسها. استخدامها يضيف التسلسل إلى نص المهمة.'),

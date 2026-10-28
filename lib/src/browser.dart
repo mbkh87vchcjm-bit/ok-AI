@@ -141,6 +141,7 @@ class WebViewBrowser implements BrowserPort {
   final WebViewController controller;
   Future<bool> Function(Uri target)? onCrossOrigin;
   void Function()? onIntervention;
+  void Function(String url)? onPageLoaded;
   String? _currentOrigin;
   final Set<String> _explicitNext = {};
   int _revision = 0;
@@ -156,7 +157,10 @@ class WebViewBrowser implements BrowserPort {
           final uri = InputPolicy.httpsUrl(request.url);
           if (!request.isMainFrame) return NavigationDecision.navigate;
           final origin = InputPolicy.origin(uri);
-          if (origin == _currentOrigin || _explicitNext.remove(origin)) {
+          // Consume the one-shot authorization even for the current origin;
+          // otherwise it could accidentally allow a later cross-origin return.
+          final explicitlyApproved = _explicitNext.remove(origin);
+          if (origin == _currentOrigin || explicitlyApproved) {
             return NavigationDecision.navigate;
           }
           final allow = await onCrossOrigin?.call(uri) ?? false;
@@ -166,6 +170,7 @@ class WebViewBrowser implements BrowserPort {
         }
       },
       onPageStarted: (url) {
+        _explicitNext.clear();
         _revision++;
         try {
           _currentOrigin = InputPolicy.origin(InputPolicy.httpsUrl(url));
@@ -173,8 +178,9 @@ class WebViewBrowser implements BrowserPort {
           _currentOrigin = null;
         }
       },
-      onPageFinished: (_) async {
+      onPageFinished: (url) async {
         _revision++;
+        onPageLoaded?.call(url);
         try {
           if (await needsIntervention()) onIntervention?.call();
         } catch (_) {
@@ -201,6 +207,9 @@ class WebViewBrowser implements BrowserPort {
 
   Future<Map<String, dynamic>> _evaluate(String script) async {
     final result = await controller.runJavaScriptReturningResult(script);
+    if (result is String && result.length > 40000) {
+      throw const PolicyException('نتيجة الصفحة أكبر من الحد المسموح.');
+    }
     dynamic decoded = result;
     for (var i = 0; i < 2 && decoded is String; i++) {
       decoded = jsonDecode(decoded);

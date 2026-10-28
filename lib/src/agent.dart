@@ -504,6 +504,8 @@ class AgentController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    phase = TaskPhase.cancelled;
+    _epoch++;
     _deadlineTimer?.cancel();
     provider.cancel();
     _wakeLoop();
