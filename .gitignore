@@ -1,0 +1,20 @@
+# Flutter and Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+coverage/
+# Android is generated deterministically by scripts/bootstrap.py.
+/android/
+# Local editor and secret material
+.idea/
+.vscode/
+*.iml
+.env
+.env.*
+*.jks
+*.keystore
+key.properties
+local.properties
