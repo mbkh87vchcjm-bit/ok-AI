@@ -1,0 +1,166 @@
+name: Android CI and optional prerelease
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish a prerelease after all checks succeed'
+        type: boolean
+        default: false
+      tag:
+        description: 'New release tag, for example v0.1.0-alpha.1'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.27.4'
+          channel: stable
+          cache: false
+      - name: Test bootstrap safety
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Generate the Android scaffold
+        run: python3 scripts/bootstrap.py
+      - name: Resolve dependencies
+        run: scripts/ci.sh flutter pub get --enforce-lockfile
+      - name: Static analysis
+        run: scripts/ci.sh flutter analyze --no-pub
+      - name: Unit and widget tests
+        run: scripts/ci.sh flutter test --no-pub
+      - name: Build release-mode APK with a debug signing key
+        run: scripts/ci.sh flutter build apk --release --no-pub
+      - name: Prepare APK and checksum
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk release/personal-agent-android.apk
+          cd release
+          sha256sum personal-agent-android.apk > SHA256SUMS.txt
+          APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          "$APK_SIGNER" verify --verbose --print-certs personal-agent-android.apk > signature.txt
+          cat SHA256SUMS.txt signature.txt
+          echo "::notice title=APK checksum::$(cat SHA256SUMS.txt)"
+          echo "::notice title=APK signature::$(grep 'Signer #1 certificate SHA-256 digest:' signature.txt)"
+      - name: Upload verified build inputs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: personal-agent-android
+          path: |
+            release/personal-agent-android.apk
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  emulator:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.27.4'
+          channel: stable
+          cache: false
+      - name: Prepare Flutter project
+        run: |
+          python3 scripts/bootstrap.py
+          scripts/ci.sh flutter pub get --enforce-lockfile
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: personal-agent-android
+          path: release
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install APK and exercise the app on an Android emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            (cd release && sha256sum --check SHA256SUMS.txt)
+            adb install -r release/personal-agent-android.apk
+            adb shell am start -W -n dev.okai.personal_agent/.MainActivity | tee /tmp/launch-result.txt
+            grep -q 'Status: ok' /tmp/launch-result.txt
+            adb shell pidof dev.okai.personal_agent
+            echo '::notice title=Android emulator smoke test::Release APK installed and launch returned Status: ok on Android API 30.'
+            adb uninstall dev.okai.personal_agent
+            scripts/ci.sh flutter test integration_test/app_smoke_test.dart
+
+  publish:
+    # The session's GitHub integration can push but cannot dispatch workflows.
+    # A deliberate commit subject acts as a one-time, branch-scoped release request.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/arena/29e6d8bf-ok-ai' &&
+       startsWith(github.event.head_commit.message, '[publish-prerelease] v'))
+    needs: [build, emulator]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: personal-agent-android
+          path: release
+      - name: Verify checksum and publish a new prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -eu
+          if [ "$TRIGGER_EVENT" = 'push' ]; then
+            RELEASE_TAG="${COMMIT_MESSAGE%%$'\n'*}"
+            RELEASE_TAG="${RELEASE_TAG#\[publish-prerelease\] }"
+          else
+            RELEASE_TAG="$REQUESTED_TAG"
+          fi
+          if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo 'Invalid release tag' >&2; exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'Refusing to reuse an existing tag' >&2; exit 1
+          fi
+          (cd release && sha256sum --check SHA256SUMS.txt)
+          gh release create "$RELEASE_TAG" \
+            release/personal-agent-android.apk release/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --prerelease --title "$RELEASE_TAG" \
+            --notes-file docs/RELEASE_NOTES_AR.md
+          mkdir -p "$RUNNER_TEMP/published"
+          gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/published" \
+            --pattern personal-agent-android.apk --pattern SHA256SUMS.txt
+          (cd "$RUNNER_TEMP/published" && sha256sum --check SHA256SUMS.txt)
+          echo '::notice title=Published release verified::The published APK was downloaded and matched SHA256SUMS.txt.'

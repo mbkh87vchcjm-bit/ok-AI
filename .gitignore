@@ -1,0 +1,22 @@
+# Flutter and Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+coverage/
+# Local editor and secret material
+.idea/
+.vscode/
+*.iml
+.env
+.env.*
+*.jks
+*.keystore
+key.properties
+local.properties
+
+# Python caches
+__pycache__/
+*.py[cod]
