@@ -37,7 +37,10 @@ void main() {
       await loaded.future.timeout(const Duration(seconds: 60));
       final snapshot = await browser.readPage();
       expect(snapshot.url, startsWith('https://example.org/'));
-      expect(snapshot.text, contains('Example Domain'));
+      // The public page's heading changes; verify real page text, not a fixed title.
+      expect(snapshot.text.toLowerCase(), contains('domain'));
+      expect(snapshot.text, isNot(contains('ERR_')));
+      expect(snapshot.text.toLowerCase(), isNot(contains('web page not available')));
     });
   });
 }
