@@ -132,6 +132,8 @@ class TaskPermissions {
     _denied.clear();
   }
 
+  void denyForTask(String action, String origin) => _denied.add('$action|$origin');
+
   Future<void> revoke(String key) async {
     _persistent.remove(key);
     _task.remove(key);

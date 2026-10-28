@@ -197,9 +197,22 @@ class LocalStore {
     await _persist();
   }
 
-  Future<File> _outputFile(String relative) async {
+  Future<File> _outputFile(String relative, {bool createParents = false, bool Function()? canContinue}) async {
     final path = InputPolicy.relativeOutputPath(relative);
-    await outputDirectory.create(recursive: true);
+    void guard() {
+      if (canContinue != null && !canContinue()) {
+        throw const PolicyException('أُوقفت المهمة قبل إتمام حفظ الملف.');
+      }
+    }
+    final rootType = await FileSystemEntity.type(outputDirectory.path, followLinks: false);
+    if (rootType == FileSystemEntityType.link ||
+        (rootType != FileSystemEntityType.notFound && rootType != FileSystemEntityType.directory)) {
+      throw const PolicyException('مجلد النتائج غير آمن.');
+    }
+    if (createParents && rootType == FileSystemEntityType.notFound) {
+      guard();
+      await outputDirectory.create(recursive: true);
+    }
     var parent = outputDirectory.path;
     final parts = path.split('/');
     for (final part in parts.take(parts.length - 1)) {
@@ -208,7 +221,10 @@ class LocalStore {
       if (type == FileSystemEntityType.link || (type != FileSystemEntityType.notFound && type != FileSystemEntityType.directory)) {
         throw const PolicyException('مسار الإخراج غير آمن.');
       }
-      await Directory(parent).create();
+      if (createParents && type == FileSystemEntityType.notFound) {
+        guard();
+        await Directory(parent).create();
+      }
     }
     final file = File(p.join(parent, parts.last));
     if (await FileSystemEntity.type(file.path, followLinks: false) == FileSystemEntityType.link) {
@@ -217,14 +233,17 @@ class LocalStore {
     return file;
   }
 
+  // Existence checks are read-only, even before the user approves saving.
   Future<bool> outputExists(String relative) async => (await _outputFile(relative)).exists();
 
-  Future<void> saveOutput(String relative, String content) async {
+  Future<void> saveOutput(String relative, String content, {bool Function()? canContinue}) async {
     InputPolicy.outputContent(content);
-    final file = await _outputFile(relative);
+    final file = await _outputFile(relative, createParents: true, canContinue: canContinue);
     final temp = File('${file.path}.tmp-${_id()}');
     try {
+      if (canContinue != null && !canContinue()) throw const PolicyException('أُلغي الحفظ.');
       await temp.writeAsString(content, flush: true);
+      if (canContinue != null && !canContinue()) throw const PolicyException('أُلغي الحفظ قبل استبدال الملف.');
       await temp.rename(file.path);
     } finally {
       if (await temp.exists()) await temp.delete();

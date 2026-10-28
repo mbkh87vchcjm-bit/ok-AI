@@ -33,10 +33,17 @@ jobs:
           flutter-version: '3.27.4'
           channel: stable
           cache: false
+      - name: Test bootstrap safety
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Generate the Android scaffold
         run: python3 scripts/bootstrap.py
+      - name: Audit Android scaffold
+        run: python3 scripts/audit_scaffold.py
       - name: Resolve dependencies
         run: scripts/ci.sh flutter pub get
+      - name: Record resolved lockfile for audit
+        run: |
+          python3 -c 'import base64,pathlib,zlib; data=pathlib.Path("pubspec.lock").read_bytes(); print("::notice title=Resolved pubspec lock::"+base64.b64encode(zlib.compress(data)).decode())'
       - name: Static analysis
         run: scripts/ci.sh flutter analyze --no-pub
       - name: Unit and widget tests

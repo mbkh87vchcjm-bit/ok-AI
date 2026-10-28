@@ -7,6 +7,7 @@ need to be regenerated. No API credentials are required.
 """
 from pathlib import Path
 import shutil
+import re
 import subprocess
 import sys
 import tempfile
@@ -54,6 +55,29 @@ def main() -> int:
         if text.count(needle) != 1 or "signingConfig = signingConfigs.debug" not in text:
             raise SystemExit("Unexpected Gradle template; refusing to patch it")
         gradle.write_text(text.replace(needle, "minSdk = 23", 1), encoding="utf-8")
+        # Newer AndroidX WebKit requires AGP >= 8.1.1. Pair AGP 8.6.1
+        # with its supported Gradle 8.7 and verify the distribution checksum.
+        settings = android / "settings.gradle"
+        settings_text = settings.read_text(encoding="utf-8")
+        settings_text, count = re.subn(
+            r'(id "com\.android\.application" version ")[^"]+(" apply false)',
+            r'\g<1>8.6.1\g<2>', settings_text,
+        )
+        if count != 1:
+            raise SystemExit("Unexpected Android plugin template; refusing to patch it")
+        settings.write_text(settings_text, encoding="utf-8")
+        wrapper = android / "gradle/wrapper/gradle-wrapper.properties"
+        wrapper_text = wrapper.read_text(encoding="utf-8")
+        wrapper_text, count = re.subn(
+            r'distributionUrl=.*',
+            lambda _: r'distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip',
+            wrapper_text,
+        )
+        if count != 1 or "distributionSha256Sum=" in wrapper_text:
+            raise SystemExit("Unexpected Gradle wrapper template; refusing to patch it")
+        # https://gradle.org/release-checksums/ (8.7 binary distribution)
+        wrapper_text += "\ndistributionSha256Sum=544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d\n"
+        wrapper.write_text(wrapper_text, encoding="utf-8")
         # Copy only the platform scaffold. The application's lib/, pubspec,
         # tests and workflow remain untouched.
         shutil.copytree(android, ANDROID)
