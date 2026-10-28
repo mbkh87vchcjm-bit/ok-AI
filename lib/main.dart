@@ -160,6 +160,8 @@ class _HomePageState extends State<HomePage> {
               actions: [
                 Wrap(spacing: 8, runSpacing: 4, children: [
                   TextButton(onPressed: () => Navigator.pop(dialogContext, ApprovalScope.deny), child: const Text('رفض')),
+                  if (_agent?.isActive ?? false)
+                    TextButton(onPressed: () { _agent!.cancel(); Navigator.pop(dialogContext, ApprovalScope.deny); }, child: const Text('إلغاء المهمة')),
                   FilledButton.tonal(onPressed: () => Navigator.pop(dialogContext, ApprovalScope.once), child: const Text('هذه المرة')),
                   if (request.ruleEligible)
                     OutlinedButton(onPressed: () => Navigator.pop(dialogContext, ApprovalScope.task), child: const Text('لهذه المهمة')),
@@ -188,6 +190,8 @@ class _HomePageState extends State<HomePage> {
         ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('رفض')),
+          if (_agent?.isActive ?? false)
+            TextButton(onPressed: () { _agent!.cancel(); Navigator.pop(dialogContext); }, child: const Text('إلغاء المهمة')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, text.text), child: const Text('متابعة')),
         ],
       ),
