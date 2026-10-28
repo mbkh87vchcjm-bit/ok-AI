@@ -49,6 +49,19 @@ class BootstrapTests(unittest.TestCase):
                 self.assertEqual(bootstrap.main(), 0)
                 self.assertEqual(run.call_count, 1)
 
+    def test_refuses_insecure_existing_manifest_without_modifying_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'pubspec.yaml').write_text('name: x\n')
+            folder = root / 'android/app/src/main'
+            folder.mkdir(parents=True)
+            manifest = folder / 'AndroidManifest.xml'
+            manifest.write_text('<manifest><application /></manifest>')
+            with patch.object(bootstrap, 'ROOT', root), patch.object(bootstrap, 'ANDROID', root / 'android'):
+                with self.assertRaises(SystemExit):
+                    bootstrap.main()
+            self.assertEqual(manifest.read_text(), '<manifest><application /></manifest>')
+
     def test_refuses_to_overwrite_incomplete_android(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

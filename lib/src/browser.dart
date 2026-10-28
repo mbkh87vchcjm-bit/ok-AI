@@ -35,7 +35,8 @@ class BrowserScripts {
   static const _challengeFunction = r'''
     function humanCheck() {
       const selectors = [
-        'input[type="password"]', 'input[autocomplete="one-time-code"]',
+        'input[type="password"]', 'input[autocomplete="username"]', 'input[autocomplete="one-time-code"]',
+        'form[action*="login" i] input', 'form[action*="signin" i] input',
         'input[name*="otp" i]', 'input[name*="verification" i]',
         'iframe[src*="recaptcha" i]', 'iframe[src*="hcaptcha" i]',
         '[id*="captcha" i]', '[class*="captcha" i]'
@@ -121,7 +122,7 @@ class BrowserScripts {
       const kind = (e.type || '').toLowerCase();
       const hints = ['name','id','autocomplete','placeholder','aria-label'].map(k => e.getAttribute(k) || '').join(' ').toLowerCase();
       if (['password','file','hidden','submit','button','reset','checkbox','radio','image'].includes(kind) ||
-          /password|passwd|secret|token|one-time|otp|verification|2fa|cvv|cvc|credit.?card/.test(hints))
+          /password|passwd|secret|token|one-time|otp|verification|2fa|username|user.?name|login|sign.?in|cvv|cvc|credit|card|cc-|iban|routing|ssn/.test(hints))
         return JSON.stringify({ok:false, error:'لا تُملأ حقول الدخول أو التحقق أو الدفع آليًا.'});
       if (e.tagName === 'INPUT' || e.tagName === 'TEXTAREA') {
         const proto = e.tagName === 'INPUT' ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;

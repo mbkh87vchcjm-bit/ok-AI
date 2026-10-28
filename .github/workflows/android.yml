@@ -37,13 +37,18 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Generate the Android scaffold
         run: python3 scripts/bootstrap.py
-      - name: Audit Android scaffold
-        run: python3 scripts/audit_scaffold.py
+      - name: Audit Android scaffold (1/4)
+        run: python3 scripts/audit_scaffold.py 0
+      - name: Audit Android scaffold (2/4)
+        run: python3 scripts/audit_scaffold.py 1
+      - name: Audit Android scaffold (3/4)
+        run: python3 scripts/audit_scaffold.py 2
+      - name: Audit Android scaffold (4/4)
+        run: python3 scripts/audit_scaffold.py 3
       - name: Resolve dependencies
         run: scripts/ci.sh flutter pub get
       - name: Record resolved lockfile for audit
-        run: |
-          python3 -c 'import base64,pathlib,zlib; data=pathlib.Path("pubspec.lock").read_bytes(); print("::notice title=Resolved pubspec lock::"+base64.b64encode(zlib.compress(data)).decode())'
+        run: python3 scripts/audit_lock.py
       - name: Static analysis
         run: scripts/ci.sh flutter analyze --no-pub
       - name: Unit and widget tests
@@ -149,3 +154,8 @@ jobs:
             release/personal-agent-android.apk release/SHA256SUMS.txt \
             --target "$GITHUB_SHA" --prerelease --title "$RELEASE_TAG" \
             --notes-file docs/RELEASE_NOTES_AR.md
+          mkdir -p "$RUNNER_TEMP/published"
+          gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/published" \
+            --pattern personal-agent-android.apk --pattern SHA256SUMS.txt
+          (cd "$RUNNER_TEMP/published" && sha256sum --check SHA256SUMS.txt)
+          echo '::notice title=Published release verified::The published APK was downloaded and matched SHA256SUMS.txt.'

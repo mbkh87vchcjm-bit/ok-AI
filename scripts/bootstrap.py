@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 ANDROID = ROOT / "android"
@@ -22,7 +23,15 @@ def main() -> int:
     if ANDROID.exists():
         if not (ANDROID / "app/src/main/AndroidManifest.xml").is_file():
             raise SystemExit("android/ already exists but is incomplete; it was not modified")
-        print("android/ already exists; leaving it unchanged")
+        manifest = ET.parse(ANDROID / "app/src/main/AndroidManifest.xml").getroot()
+        ns = "{http://schemas.android.com/apk/res/android}"
+        app = manifest.find("application")
+        internet = any(item.get(ns + "name") == "android.permission.INTERNET"
+                       for item in manifest.findall("uses-permission"))
+        if app is None or app.get(ns + "allowBackup") != "false" or \
+           app.get(ns + "usesCleartextTraffic") != "false" or not internet:
+            raise SystemExit("Existing Android manifest lacks required safety settings; it was not modified")
+        print("android/ already exists and passes manifest checks; leaving it unchanged")
         return 0
     flutter = shutil.which("flutter")
     if not flutter:
